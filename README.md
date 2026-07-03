@@ -50,15 +50,25 @@ Flashable/interesting: `boot` (32 MB), `recovery` (32 MB), `system` (800 MB), `c
 
 Full details + sizes in [`BACKUP.md`](BACKUP.md).
 
+## Key findings (full detail in [SYSTEM_ANALYSIS.md](SYSTEM_ANALYSIS.md))
+
+- **OS lineage:** BlocksOS is a fork of **Cronologics Corp's** wearable OS (`com.cronologics.*` packages). Google acquired Cronologics in Dec 2016, forcing BLOCKS to self-maintain the stack — hence the in-house Nov 2017 build.
+- **The module bus is SPI, not I²C/UART.** A root userspace daemon `modulecom_daemon` (`/system/vendor/bin`, ZeroMQ to apps, *no* Android HAL, *no* Binder) drives a **"CoreHub" MCU** — an ST part at `/sys/bus/spi/devices/spi5.0/st-manager` (SPI bus 5). CoreHub fans out to the swappable hardware modules.
+- **Per-module MCU firmware** ships in `/system/etc/firmware/modules/` (`EZW2_{CoreHub,GPS,FLASHLIGHT,BUTTON,BAROMETER,EXTRA_BATT,HRM}_*.bin`); the daemon can OTA-flash them over CoreHub. "EZW2" is an internal pre-BLOCKS codename.
+- **Clean capability abstraction:** apps query `blocks::Capability` (Temperature/Pressure/HeartRate/BatteryLevel…) without knowing which physical module answers.
+- **Engineering CLIs left in the shipping build:** `chutil` (CoreHub test tool, scenarios like `led_stress`) and `bclient` (API client) — unstripped, full debug symbols.
+- **Security reality:** `test-keys`, permissive SELinux, ADB in the default USB composition, factory/MMI test suite + QTI sample-auth demo code left in, and a world-writable (`chmod 666`) SPI node — `modulecom_daemon` runs as root parsing untrusted data from physically-swappable modules with no MAC confinement. Classic un-hardened prototype.
+
+**Top improvement targets:** lock down + strip the CoreHub daemon and its SPI node · debloat factory/sample cruft · drop the unused CDMA/LTE RIL stack · promote CoreHub to a real HIDL/AIDL HAL · backport kernel CVE fixes (patch level 2016-05-01).
+
 ## Repo layout
 ```
 README.md              this file
 BACKUP.md              full backup/restore/EDL/fastboot procedure
-extracted/
-  SYSTEM_ANALYSIS.md   reverse-engineering findings (apps, module bus, init, improvements)
+SYSTEM_ANALYSIS.md     reverse-engineering findings (apps, module bus, init, improvements)
 tools/
   patch_ramdisk_prop.py   surgical default.prop editor for the boot ramdisk (root prep)
-  mkbootimg/              AOSP boot image pack/unpack (vendored)
+  mkbootimg/              AOSP boot image pack/unpack (vendored, git-ignored)
 ```
 (`edl_backup/`, `device-info/`, `venv/` are git-ignored — binaries & secrets stay local.)
 
