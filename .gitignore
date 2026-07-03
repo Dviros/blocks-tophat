@@ -1,0 +1,9 @@
+venv/
+edl_backup/
+device-info/
+extracted/
+tools/mkbootimg/
+*.bin
+*.img
+*.log
+.DS_Store
