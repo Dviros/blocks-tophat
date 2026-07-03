@@ -107,6 +107,34 @@ part strings, valid Cortex-M reset vectors). Reflashable/reversible.
   `Firmware version (Retail): %d(Type), %d(Year), %d(Week), %d(Sequence)` → the `EZW2_*_20164301`
   datecode decodes as **Year 2016, Week 43, Seq 01** (late Oct 2016), not a broken calendar date.
 
+## Wire format & internals (disassembly-level, `api::APIServer`/`applyFirmwareUpdate`)
+
+**ZeroMQ broker** — one `api::APIServer` singleton runs a custom **ROUTER/DEALER broker** via
+`zmq_proxy_steerable` (not Majordomo): `ROUTER` bound `tcp://*:6676` (frontend), `DEALER` bound
+`inproc://backend`, `PAIR` control `inproc://brokerctrl`, `PUB` bound `tcp://*:6677` (async
+notifications). A fixed pool of **4 `ReceiverServerWorker` threads** services the backend.
+
+**Message encoding** — custom **binary TLV** (`api::APIMessage` = `Header` + per-field `FieldHeader`;
+`addField`/`readField<T>`), **not** JSON/protobuf/msgpack. Async correlation via `api::cid_t`
+(`awaitResponse`/`awaitACK`). `api::MessageKind = {Request=0, Response=1, Notification=2}`;
+Notification message-IDs occupy a separate **≥4096** range.
+
+**Firmware transfer wire format** (`FirmwareUpdate::applyFirmwareUpdate`):
+- streamed in **4064-byte (`0xFE0`) chunks** (4 KB − 32 B overhead);
+- each package = **16-byte `Firmware_Package_MetaData_t`** {`fw_pkg_total_number`, `fw_pkg_number`,
+  `fw_pkg_length`, `fw_pkg_checkSum`, `fw_pkg_reserve`} **+ payload**;
+- integrity = **CRC32 only** (`crc32()`, `blocks::CheckSum`, `getFWFileChecksum`, `packageDataCRC`) —
+  **no signature** → SECURITY.md #3.
+
+**Firmware-update FSM** — enum `blocks::FW_UPD_PROCESSING_STATUS`, 23 states (from `getStatusText()`):
+`None → Start → Ready-to-Receive → Parsing package → Update corehub → Update module → Reboot →
+Success`; errors: `Check-Sum` / `Module Check-Sum` / `Bin Check-Sum`, `Same-Version`, `Old-Version`,
+`Memory erase`, `Package sequence`, `Parsing package`, `Module busy`, `Have bootloader`,
+`Firmware size`, `Module detach`, `Standard command`, `Abort`, `Fail`.
+
+**Provenance:** `modulecom_daemon` self-IDs as `Blocks Module Communication Daemon v0.2.0.2`;
+`bclient v0.7.0` / `libapi-v0.6.1` (build path `/build/blocks/code/client-utility`), GCC 4.9 + clang 3.8.
+
 ## What this enables
 - **Write a companion / GadgetBridge integration** speaking `api::` over ZeroMQ, or over the BLE
   GATT bridge (`CRONO_SERVICE` 0xFE5A, see ROADMAP) — enumerate modules, subscribe to capability data.
