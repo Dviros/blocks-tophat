@@ -61,11 +61,23 @@ Full details + sizes in [`BACKUP.md`](BACKUP.md).
 
 **Top improvement targets:** lock down + strip the CoreHub daemon and its SPI node · debloat factory/sample cruft · drop the unused CDMA/LTE RIL stack · promote CoreHub to a real HIDL/AIDL HAL · backport kernel CVE fixes (patch level 2016-05-01).
 
+## Deep-dive reverse-engineering reports
+
+Four focused reports in [`reports/`](reports/):
+
+- **[SECURITY.md](reports/SECURITY.md)** — ranked vulns. Headlines: the root daemon binds **ZeroMQ on wildcard TCP `*:6676/6677`** (network-reachable, no auth); module/OS firmware is **CRC-only, no signature**, delivered over cleartext-HTTP FOTA; a `normal`-permission **confused-deputy** chain into a privileged `WatchfaceService`; exported Health (HR/steps) + Responses providers with no permission; and an unpatched-kernel **Dirty COW (CVE-2016-5195)** → local root.
+- **[COREHUB_PROTOCOL.md](reports/COREHUB_PROTOCOL.md)** — the two-layer module protocol: 17 `corehub::` SPI messages, 28 `api::` ZeroMQ messages, 8 drivers, 8 capabilities, 36 `StandardFunction`s, and the STM32 module-firmware format (plaintext, reflashable).
+- **[EASTER_EGGS.md](reports/EASTER_EGGS.md)** — the `aw808`/`cowatch` gate proving the **Cronologics CoWatch** lineage, a reconstructed `/data` debug dashboard with a tophat icon, `"Commence fiddling with hardware now."`, a self-aware `"Terrible hack"` comment, Cathay Pacific watchfaces, a dead `BlocksHalfWatchface`, and an unshipped Alexa/assistant layer.
+- **[ROADMAP_ROMS.md](reports/ROADMAP_ROMS.md)** — root ranked (Magisk #1; **Dirty COW** is the no-tools option), an honest "modify-stock-only, no full ROM port" verdict, a debloat list, and a GadgetBridge path via the extracted `CRONO_SERVICE` (`0xFE5A`) BLE UUIDs.
+
+> **Root status, corrected:** the local `boot-insecure-props.img` (a `ro.secure=0` prop-flip) **boots but does NOT grant root** — this `user` build's `adbd` is compiled `ALLOW_ADBD_ROOT=0` and ignores the flag. Real root = Magisk-patched boot, a ramdisk `su` injection, or the **Dirty COW** primitive. All reversible from the backup.
+
 ## Repo layout
 ```
 README.md              this file
 BACKUP.md              full backup/restore/EDL/fastboot procedure
 SYSTEM_ANALYSIS.md     reverse-engineering findings (apps, module bus, init, improvements)
+reports/               deep-dives: SECURITY · COREHUB_PROTOCOL · EASTER_EGGS · ROADMAP_ROMS
 tools/
   patch_ramdisk_prop.py   surgical default.prop editor for the boot ramdisk (root prep)
   mkbootimg/              AOSP boot image pack/unpack (vendored, git-ignored)
